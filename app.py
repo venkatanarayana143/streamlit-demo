@@ -12,7 +12,88 @@ st.header('Anamoly detection on Martian Surface')
 
 #st.balloons()
 option = st.sidebar.radio("Anamoly detection on Martian Surface",['Home', 'About'])
- 
+
+def draw_image_with_boxes(image, boxes, header, description):
+        # Superpose the semi-transparent object detection boxes.    # Colors for the boxes
+        LABEL_COLORS = {
+            "crater": [255, 255, 255],
+            "dark dune": [255, 255, 255],
+            "slope streak": [255, 255, 255],
+            "bright dune": [255, 255, 255],
+            "impact ejecta": [255, 255, 255],
+            "swiss cheese":[255, 255, 255],
+            "spider":[255, 255, 255]
+        }
+
+        image_with_boxes = image.astype(np.float64)
+        for _, (xmin, ymin, xmax, ymax, label) in boxes.iterrows():
+            image_with_boxes[int(ymin):int(ymax),int(xmin):int(xmax),:] += LABEL_COLORS[label]
+            image_with_boxes[int(ymin):int(ymax),int(xmin):int(xmax),:] /= 2
+
+        # Draw the header and image.
+        st.subheader(header)
+        st.markdown(description)
+        st.image(image_with_boxes.astype(np.uint8), use_column_width=True)
+
+def yolo_v4(image, confidence_threshold, overlap_threshold):
+        @st.cache(allow_output_mutation=True)
+        def load_network(config_path, weights_path):
+            net = cv2.dnn.readNetFromDarknet(config_path, weights_path)
+            output_layer_names = net.getLayerNames()
+            output_layer_names = [output_layer_names[i[0] - 1] for i in net.getUnconnectedOutLayers()]
+            return net, output_layer_names
+        net, output_layer_names = load_network("yolov4-custom.cfg", "yolov4.weights")
+
+        # Run the YOLO neural net.
+        blob = cv2.dnn.blobFromImage(image, 1 / 255.0, (416, 416), swapRB=True, crop=False)
+        net.setInput(blob)
+        layer_outputs = net.forward(output_layer_names)
+
+        boxes, confidences, class_IDs = [], [], []
+        H, W = image.shape[:2]
+        for output in layer_outputs:
+            for detection in output:
+                scores = detection[5:]
+                classID = np.argmax(scores)
+                confidence = scores[classID]
+                if confidence > confidence_threshold:
+                    box = detection[0:4] * np.array([W, H, W, H])
+                    centerX, centerY, width, height = box.astype("int")
+                    x, y = int(centerX - (width / 2)), int(centerY - (height / 2))
+                    boxes.append([x, y, int(width), int(height)])
+                    confidences.append(float(confidence))
+                    class_IDs.append(classID)
+        indices = cv2.dnn.NMSBoxes(boxes, confidences, confidence_threshold, overlap_threshold)
+
+        UDACITY_LABELS = {
+            0: 'crater',
+            1: 'dark dune',
+            2: 'slope streak',
+            3: 'bright dune',
+            4: 'impact ejecta',
+            5: 'swiss cheese',
+            6: 'spider'
+        }
+        xmin, xmax, ymin, ymax, labels = [], [], [], [], []
+        if len(indices) > 0:
+            # loop over the indexes we are keeping
+            for i in indices.flatten():
+                label = UDACITY_LABELS.get(class_IDs[i], None)
+                if label is None:
+                    continue
+
+                # extract the bounding box coordinates
+                x, y, w, h = boxes[i][0], boxes[i][1], boxes[i][2], boxes[i][3]
+
+                xmin.append(x)
+                ymin.append(y)
+                xmax.append(x+w)
+                ymax.append(y+h)
+                labels.append(label)
+
+        boxes = pd.DataFrame({"xmin": xmin, "ymin": ymin, "xmax": xmax, "ymax": ymax, "labels": labels})
+        return boxes[["xmin", "ymin", "xmax", "ymax", "labels"]]
+
 if option == 'Home':
   st.sidebar.subheader('List of Anamolies')
   
@@ -55,80 +136,39 @@ if option == 'Home':
   
   uploaded_file = st.file_uploader("Choose a image file", type="jpg")
   
+  
+
+  
   if uploaded_file is not None:
       # Convert the file to an opencv image.
       file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
       opencv_image = cv2.imdecode(file_bytes, 1)
-      opencv_image = cv2.cvtColor(opencv_image, cv2.COLOR_BGR2RGB)
-      resized = cv2.resize(opencv_image,(224,224))
+      opencv_image = cv2.cvtColor(opencv_image, cv2.COLOR_BGR2GRAY)
+      resized = cv2.resize(opencv_image,(256,256))
       # Now do something with the image! For example, let's display it:
-      st.image(opencv_image, channels="RGB")
+      st.image(opencv_image, channels="BGR")
 
-      resized = mobilenet_v2_preprocess_input(resized)
-      img_reshape = resized[np.newaxis,...]
-      
+    # # Check
+    #   resized = mobilenet_v2_preprocess_input(resized)
+    #   img_reshape = resized[np.newaxis,...]
+    #   print(img_reshape.shape)
+    
       predictn = st.button("Predict")
 
-  def yolo_v4(image, confidence_threshold, overlap_threshold):
-      @st.cache(allow_output_mutation=True)
-      def load_network(config_path, weights_path):
-          net = cv2.dnn.readNetFromDarknet(config_path, weights_path)
-          output_layer_names = net.getLayerNames()
-          output_layer_names = [output_layer_names[i[0] - 1] for i in net.getUnconnectedOutLayers()]
-          return net, output_layer_names
-      net, output_layer_names = load_network("yolov4-custom.cfg", "yolov4.weights")
-
-      # Run the YOLO neural net.
-      blob = cv2.dnn.blobFromImage(image, 1 / 255.0, (416, 416), swapRB=True, crop=False)
-      net.setInput(blob)
-      layer_outputs = net.forward(output_layer_names)
-
-      boxes, confidences, class_IDs = [], [], []
-      H, W = image.shape[:2]
-      for output in layer_outputs:
-          for detection in output:
-              scores = detection[5:]
-              classID = np.argmax(scores)
-              confidence = scores[classID]
-              if confidence > confidence_threshold:
-                  box = detection[0:4] * np.array([W, H, W, H])
-                  centerX, centerY, width, height = box.astype("int")
-                  x, y = int(centerX - (width / 2)), int(centerY - (height / 2))
-                  boxes.append([x, y, int(width), int(height)])
-                  confidences.append(float(confidence))
-                  class_IDs.append(classID)
-      indices = cv2.dnn.NMSBoxes(boxes, confidences, confidence_threshold, overlap_threshold)
-
-      UDACITY_LABELS = {
-          0: 'crater',
-          1: 'dark dune',
-          2: 'slope streak',
-          3: 'bright dune',
-          4: 'impact ejecta',
-          5: 'swiss cheese',
-          6: 'spider'
-      }
-      xmin, xmax, ymin, ymax, labels = [], [], [], [], []
-      if len(indices) > 0:
-          # loop over the indexes we are keeping
-          for i in indices.flatten():
-              label = UDACITY_LABELS.get(class_IDs[i], None)
-              if label is None:
-                  continue
-
-              # extract the bounding box coordinates
-              x, y, w, h = boxes[i][0], boxes[i][1], boxes[i][2], boxes[i][3]
-
-              xmin.append(x)
-              ymin.append(y)
-              xmax.append(x+w)
-              ymax.append(y+h)
-              labels.append(label)
-
-      boxes = pd.DataFrame({"xmin": xmin, "ymin": ymin, "xmax": xmax, "ymax": ymax, "labels": labels})
-      return boxes[["xmin", "ymin", "xmax", "ymax", "labels"]]
+      if predictn:
     
-  }
+        # image_url = os.path.join(DATA_URL_ROOT, selected_frame)
+        image = resized
+
+        # Add boxes for objects on the image. These are the boxes for the ground image.
+        boxes = metadata[metadata.frame == selected_frame].drop(columns=["frame"])
+        draw_image_with_boxes(image, boxes, "Ground Truth",
+            "**Human-annotated data** (frame `%i`)" % selected_frame_index)
+
+        # Get the boxes for the objects detected by YOLO by running the YOLO model.
+        yolo_boxes = yolo_v3(image, confidence_threshold, overlap_threshold)
+        draw_image_with_boxes(image, yolo_boxes, "Real-time Computer Vision",
+            "**YOLO v3 Model** (overlap `%3.1f`) (confidence `%3.1f`)" % (overlap_threshold, confidence_threshold))
 
 
 
