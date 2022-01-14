@@ -146,7 +146,7 @@ if option == 'Home':
       opencv_image = cv2.cvtColor(opencv_image, cv2.COLOR_BGR2GRAY)
       resized = cv2.resize(opencv_image,(256,256))
       # Now do something with the image! For example, let's display it:
-      st.image(opencv_image, channels="BGR")
+      st.image(opencv_image, channels="RGB")
 
     # # Check
     #   resized = mobilenet_v2_preprocess_input(resized)
