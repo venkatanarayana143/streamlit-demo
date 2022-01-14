@@ -69,6 +69,69 @@ if option == 'Home':
       
       predictn = st.button("Predict")
 
+  def yolo_v4(image, confidence_threshold, overlap_threshold):
+      @st.cache(allow_output_mutation=True)
+      def load_network(config_path, weights_path):
+          net = cv2.dnn.readNetFromDarknet(config_path, weights_path)
+          output_layer_names = net.getLayerNames()
+          output_layer_names = [output_layer_names[i[0] - 1] for i in net.getUnconnectedOutLayers()]
+          return net, output_layer_names
+      net, output_layer_names = load_network("yolov4-custom.cfg", "yolov4.weights")
+
+      # Run the YOLO neural net.
+      blob = cv2.dnn.blobFromImage(image, 1 / 255.0, (416, 416), swapRB=True, crop=False)
+      net.setInput(blob)
+      layer_outputs = net.forward(output_layer_names)
+
+      boxes, confidences, class_IDs = [], [], []
+      H, W = image.shape[:2]
+      for output in layer_outputs:
+          for detection in output:
+              scores = detection[5:]
+              classID = np.argmax(scores)
+              confidence = scores[classID]
+              if confidence > confidence_threshold:
+                  box = detection[0:4] * np.array([W, H, W, H])
+                  centerX, centerY, width, height = box.astype("int")
+                  x, y = int(centerX - (width / 2)), int(centerY - (height / 2))
+                  boxes.append([x, y, int(width), int(height)])
+                  confidences.append(float(confidence))
+                  class_IDs.append(classID)
+      indices = cv2.dnn.NMSBoxes(boxes, confidences, confidence_threshold, overlap_threshold)
+
+      UDACITY_LABELS = {
+          0: 'crater',
+          1: 'dark dune',
+          2: 'slope streak',
+          3: 'bright dune',
+          4: 'impact ejecta',
+          5: 'swiss cheese',
+          6: 'spider'
+      }
+      xmin, xmax, ymin, ymax, labels = [], [], [], [], []
+      if len(indices) > 0:
+          # loop over the indexes we are keeping
+          for i in indices.flatten():
+              label = UDACITY_LABELS.get(class_IDs[i], None)
+              if label is None:
+                  continue
+
+              # extract the bounding box coordinates
+              x, y, w, h = boxes[i][0], boxes[i][1], boxes[i][2], boxes[i][3]
+
+              xmin.append(x)
+              ymin.append(y)
+              xmax.append(x+w)
+              ymax.append(y+h)
+              labels.append(label)
+
+      boxes = pd.DataFrame({"xmin": xmin, "ymin": ymin, "xmax": xmax, "ymax": ymax, "labels": labels})
+      return boxes[["xmin", "ymin", "xmax", "ymax", "labels"]]
+    
+  }
+
+
+
 if option == 'About':
   st.write("Here the dataset description goes")
 
