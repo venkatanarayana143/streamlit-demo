@@ -11,7 +11,7 @@ st.title('Omdena - Ahmedabad Chapter')
 st.header('Anamoly detection on Martian Surface')
 
 #st.balloons()
-option = st.sidebar.radio("Anamoly detection on Martian Surface",['Home', 'About'])
+option = st.sidebar.radio("Anamoly detection on Martian Surface",['Home', 'About','Contributors'])
 
 def draw_image_with_boxes(image, boxes, header, description):
         # Superpose the semi-transparent object detection boxes.    # Colors for the boxes
@@ -174,5 +174,8 @@ if option == 'Home':
 
 if option == 'About':
   st.write("Here the dataset description goes")
+
+if option == 'Contributors':
+  st.write("Here the contributors details goes")
 
 
