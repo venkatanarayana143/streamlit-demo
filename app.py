@@ -42,7 +42,7 @@ def yolo_v4(image, confidence_threshold, overlap_threshold):
             output_layer_names = net.getLayerNames()
             output_layer_names = [output_layer_names[i[0] - 1] for i in net.getUnconnectedOutLayers()]
             return net, output_layer_names
-        net, output_layer_names = load_network("yolov4-custom.cfg", "yolov4.weights")
+        net, output_layer_names = load_network("yolov4.cfg", "yolov4.weights")
 
         # Run the YOLO neural net.
         blob = cv2.dnn.blobFromImage(image, 1 / 255.0, (416, 416), swapRB=True, crop=False)
